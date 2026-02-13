@@ -11,4 +11,4 @@ COPY pom.xml .
 COPY src ./src
 
 # Command to run Spring Boot in development mode
-CMD ["mvn", "clean", "spring-boot:run", "-DskipTests"]
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.skipTests=true"]
