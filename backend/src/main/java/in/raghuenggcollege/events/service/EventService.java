@@ -22,6 +22,7 @@ public class EventService {
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
     private final in.raghuenggcollege.events.repository.RegistrationRepository registrationRepository;
+    private final NotificationService notificationService;
 
     public List<Event> getAllUpcomingEvents() {
         return eventRepository.findByStartTimeAfterOrderByStartTimeAsc(LocalDateTime.now());
@@ -54,6 +55,10 @@ public class EventService {
         event.setCreatedBy(user);
         Event saved = eventRepository.save(event);
         log.info("Created Event: {}, StartTime: {}", saved.getTitle(), saved.getStartTime());
+
+        // Send Real-time Notification
+        notificationService.sendGlobalNotification("New Event Alert: " + saved.getTitle() + " has been posted!");
+
         return saved;
     }
 
@@ -81,7 +86,12 @@ public class EventService {
             event.setDepartment(eventDetails.getDepartment());
         }
 
-        return eventRepository.save(event);
+        Event updated = eventRepository.save(event);
+
+        // Send Real-time Notification
+        notificationService.sendGlobalNotification("Event Update: " + updated.getTitle() + " has been modified.");
+
+        return updated;
     }
 
     @Transactional
