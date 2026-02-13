@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
+import toast from 'react-hot-toast';
 
 interface NotificationMessage {
     content: string;
@@ -27,10 +28,16 @@ export const useWebSocket = () => {
                             timestamp: new Date().toLocaleTimeString(),
                         };
                         setNotifications((prev) => [newNotification, ...prev]);
-                        // Optional: Trigger a browser notification or toast here
-                        if (Notification.permission === 'granted') {
-                            new Notification('New Event Update', { body: message.body });
-                        }
+
+                        // Trigger toast notification
+                        toast.success(message.body, {
+                            duration: 5000,
+                            position: 'top-right',
+                            style: {
+                                background: '#10B981',
+                                color: '#fff',
+                            },
+                        });
                     }
                 });
             },

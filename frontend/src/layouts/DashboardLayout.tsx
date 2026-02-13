@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import { Bell, Search } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { Toaster } from 'react-hot-toast';
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -72,11 +73,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                     </div>
                 </header>
 
-                {/* Main Content */}
                 <main className="p-8">
                     {children}
                 </main>
             </div>
+            <Toaster />
         </div>
     );
 }
