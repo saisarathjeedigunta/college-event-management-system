@@ -1,0 +1,14 @@
+# Use Maven image with JDK 17
+FROM maven:3.9-eclipse-temurin-17
+
+WORKDIR /app
+
+# Copy pom.xml and download dependencies
+COPY pom.xml .
+# RUN mvn dependency:go-offline
+
+# Copy source code
+COPY src ./src
+
+# Command to run Spring Boot in development mode
+CMD ["mvn", "spring-boot:run"]
