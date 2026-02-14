@@ -1,17 +1,36 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api } from '../../lib/api';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../lib/utils';
+import { sessionManager } from '../../services/sessionManager';
+import { SessionWarningModal } from '../../components/SessionWarningModal';
 
 export default function LoginPage() {
     const navigate = useNavigate();
     const { register, handleSubmit } = useForm();
+    const [showWarning, setShowWarning] = useState(false);
+    const [existingSession, setExistingSession] = useState<any>(null);
+    const [pendingLoginData, setPendingLoginData] = useState<any>(null);
 
-    const onSubmit = async (data: any) => {
+    const performLogin = async (data: any, forceLogout: boolean = false) => {
         try {
             const res = await api.post('/auth/login', data);
-            localStorage.setItem('token', res.data.token);
+
+            // If forcing logout, broadcast to other tabs first
+            if (forceLogout) {
+                sessionManager.broadcastLogout();
+            }
+
+            // Register this session
+            sessionManager.broadcastLogin(
+                res.data.token,
+                res.data.userId || res.data.email,
+                res.data.email,
+                res.data.role
+            );
+
             localStorage.setItem('role', res.data.role);
             localStorage.setItem('department', res.data.department || '');
 
@@ -26,6 +45,35 @@ export default function LoginPage() {
             console.error('Login Error:', error);
             toast.error(getErrorMessage(error));
         }
+    };
+
+    const onSubmit = async (data: any) => {
+        // Check for existing session
+        const existing = sessionManager.checkExistingSession();
+
+        if (existing) {
+            // Show warning modal
+            setExistingSession(existing);
+            setPendingLoginData(data);
+            setShowWarning(true);
+        } else {
+            // No existing session, proceed with login
+            await performLogin(data, false);
+        }
+    };
+
+    const handleContinueLogin = async () => {
+        setShowWarning(false);
+        if (pendingLoginData) {
+            await performLogin(pendingLoginData, true);
+            setPendingLoginData(null);
+        }
+    };
+
+    const handleCancelLogin = () => {
+        setShowWarning(false);
+        setPendingLoginData(null);
+        setExistingSession(null);
     };
 
     return (
@@ -48,9 +96,18 @@ export default function LoginPage() {
                     </button>
                 </form>
                 <div className="mt-4 text-center">
-                    <Link to="/register" className="text-sm text-blue-600 hover:underline">Need an account? Register</Link>
+                    <Link to="/register" className="text-blue-600 hover:underline">
+                        Don't have an account? Sign Up
+                    </Link>
                 </div>
             </div>
+
+            <SessionWarningModal
+                isOpen={showWarning}
+                existingSession={existingSession}
+                onContinue={handleContinueLogin}
+                onCancel={handleCancelLogin}
+            />
         </div>
     );
 }
