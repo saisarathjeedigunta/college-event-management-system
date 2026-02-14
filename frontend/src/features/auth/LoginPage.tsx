@@ -13,6 +13,7 @@ export default function LoginPage() {
     const [showWarning, setShowWarning] = useState(false);
     const [existingSession, setExistingSession] = useState<any>(null);
     const [pendingLoginData, setPendingLoginData] = useState<any>(null);
+    const [showPasswordHint, setShowPasswordHint] = useState(false);
 
     const performLogin = async (data: any, forceLogout: boolean = false) => {
         try {
@@ -44,6 +45,8 @@ export default function LoginPage() {
         } catch (error: any) {
             console.error('Login Error:', error);
             toast.error(getErrorMessage(error));
+            // Show password hint on login failure
+            setShowPasswordHint(true);
         }
     };
 
@@ -90,6 +93,28 @@ export default function LoginPage() {
                         <label className="block text-sm font-medium">Password</label>
                         <input type="password" {...register("password")} className="w-full border p-2 rounded mt-1" />
                     </div>
+
+                    {/* Password Hint - Shows on login failure */}
+                    {showPasswordHint && (
+                        <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowPasswordHint(!showPasswordHint)}
+                                className="flex items-center justify-between w-full text-left"
+                            >
+                                <span className="text-sm font-medium text-blue-900">
+                                    💡 Password Requirements
+                                </span>
+                            </button>
+                            <div className="mt-2 text-xs text-blue-800 space-y-1">
+                                <p>• At least 8 characters</p>
+                                <p>• One uppercase letter (A-Z)</p>
+                                <p>• One lowercase letter (a-z)</p>
+                                <p>• One number (0-9)</p>
+                                <p>• One special character (!@#$%...)</p>
+                            </div>
+                        </div>
+                    )}
 
                     <button className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
                         Login

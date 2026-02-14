@@ -6,11 +6,23 @@ import { api } from '../../lib/api';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../../lib/utils';
+import { validatePassword } from '../../lib/passwordUtils';
+import { PasswordStrengthIndicator } from '../../components/PasswordStrengthIndicator';
 
 const registerSchema = z.object({
     fullName: z.string().min(2, "Name is too short"),
     email: z.string().email().endsWith("@raghuenggcollege.in", "Must be a valid college email"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    password: z.string().min(8, "Password must be at least 8 characters")
+        .refine((password) => {
+            const validation = validatePassword(password);
+            return validation.isValid;
+        }, {
+            message: "Password must contain uppercase, lowercase, number, and special character"
+        }),
+    confirmPassword: z.string(),
+}).refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
 });
 
 type RegisterForm = z.infer<typeof registerSchema>;
@@ -22,15 +34,27 @@ export default function RegisterPage() {
     const [resending, setResending] = useState(false);
     const [otpExpiryTime, setOtpExpiryTime] = useState<number | null>(null);
     const [timeRemaining, setTimeRemaining] = useState<number>(0);
+    const [password, setPassword] = useState("");
     const navigate = useNavigate();
 
-    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
+    const { register, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<RegisterForm>({
         resolver: zodResolver(registerSchema),
     });
 
+    // Watch password field for real-time validation
+    const watchedPassword = watch("password", "");
+
+    useEffect(() => {
+        setPassword(watchedPassword);
+    }, [watchedPassword]);
+
     const onSubmit = async (data: RegisterForm) => {
         try {
-            await api.post('/auth/register', data);
+            await api.post('/auth/register', {
+                fullName: data.fullName,
+                email: data.email,
+                password: data.password,
+            });
             setEmailForOtp(data.email);
             setShowOtp(true);
             // OTP expires in 10 minutes
@@ -92,30 +116,46 @@ export default function RegisterPage() {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="bg-white p-8 rounded shadow-md w-96">
-                    <h2 className="text-xl font-bold mb-4">Enter OTP</h2>
-                    <p className="text-sm text-gray-600 mb-4">Sent to {emailForOtp}</p>
-                    <input
-                        type="text"
-                        value={otp}
-                        onChange={(e) => setOtp(e.target.value)}
-                        className="w-full border p-2 rounded mb-4"
-                        placeholder="6-digit code"
-                    />
-                    <button onClick={handleVerify} className="w-full bg-blue-600 text-white p-2 rounded mb-3">
-                        Verify
-                    </button>
-                    <button
-                        onClick={handleResendOtp}
-                        disabled={resending || timeRemaining > 0}
-                        className="w-full bg-gray-500 text-white p-2 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {resending ? "Sending..." : timeRemaining > 0 ? `Resend OTP (${formatTime(timeRemaining)})` : "Resend OTP"}
-                    </button>
-                    <p className="text-xs text-gray-500 text-center mt-2">
-                        {timeRemaining > 0
-                            ? `OTP expires in ${formatTime(timeRemaining)}. You can resend after it expires.`
-                            : "Didn't receive the code? Check your spam folder or click Resend."}
+                    <h2 className="text-2xl font-bold mb-6 text-center">Verify OTP</h2>
+                    <p className="text-sm text-gray-600 mb-4">
+                        We sent a verification code to <strong>{emailForOtp}</strong>
                     </p>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium">Enter OTP</label>
+                            <input
+                                value={otp}
+                                onChange={(e) => setOtp(e.target.value)}
+                                className="w-full border p-2 rounded mt-1"
+                                placeholder="Enter 6-digit code"
+                            />
+                        </div>
+                        <button
+                            onClick={handleVerify}
+                            className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+                        >
+                            Verify
+                        </button>
+                        <button
+                            onClick={handleResendOtp}
+                            disabled={resending || timeRemaining > 0}
+                            className={`w-full p-2 rounded ${timeRemaining > 0
+                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }`}
+                        >
+                            {resending
+                                ? "Sending..."
+                                : timeRemaining > 0
+                                    ? `Resend OTP (${formatTime(timeRemaining)})`
+                                    : "Resend OTP"}
+                        </button>
+                        {timeRemaining > 0 && (
+                            <p className="text-xs text-gray-500 text-center">
+                                You can request a new OTP in {formatTime(timeRemaining)}
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
         );
@@ -123,33 +163,69 @@ export default function RegisterPage() {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
-            <div className="bg-white p-8 rounded shadow-md w-96">
-                <h2 className="text-2xl font-bold mb-6 text-center">Student Registration</h2>
+            <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
+                <h2 className="text-2xl font-bold mb-6 text-center">College Event Registration</h2>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium">Full Name</label>
-                        <input {...register("fullName")} className="w-full border p-2 rounded mt-1" />
-                        {errors.fullName && <p className="text-red-500 text-xs">{errors.fullName.message}</p>}
+                        <input
+                            {...register("fullName")}
+                            className="w-full border p-2 rounded mt-1"
+                        />
+                        {errors.fullName && (
+                            <p className="text-red-500 text-sm mt-1">{errors.fullName.message}</p>
+                        )}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium">College Email</label>
-                        <input {...register("email")} className="w-full border p-2 rounded mt-1" placeholder="... @raghuenggcollege.in" />
-                        {errors.email && <p className="text-red-500 text-xs">{errors.email.message}</p>}
+                        <input
+                            {...register("email")}
+                            className="w-full border p-2 rounded mt-1"
+                            placeholder="yourname@raghuenggcollege.in"
+                        />
+                        {errors.email && (
+                            <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+                        )}
                     </div>
 
                     <div>
                         <label className="block text-sm font-medium">Password</label>
-                        <input type="password" {...register("password")} className="w-full border p-2 rounded mt-1" />
-                        {errors.password && <p className="text-red-500 text-xs">{errors.password.message}</p>}
+                        <input
+                            type="password"
+                            {...register("password")}
+                            className="w-full border p-2 rounded mt-1"
+                        />
+                        {errors.password && (
+                            <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
+                        )}
+                        <PasswordStrengthIndicator password={password} />
                     </div>
 
-                    <button disabled={isSubmitting} className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">
-                        {isSubmitting ? "Registering..." : "Sign Up"}
+                    <div>
+                        <label className="block text-sm font-medium">Confirm Password</label>
+                        <input
+                            type="password"
+                            {...register("confirmPassword")}
+                            className="w-full border p-2 rounded mt-1"
+                        />
+                        {errors.confirmPassword && (
+                            <p className="text-red-500 text-sm mt-1">{errors.confirmPassword.message}</p>
+                        )}
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+                    >
+                        {isSubmitting ? "Registering..." : "Register"}
                     </button>
                 </form>
                 <div className="mt-4 text-center">
-                    <Link to="/login" className="text-sm text-blue-600 hover:underline">Already have an account? Login</Link>
+                    <Link to="/login" className="text-blue-600 hover:underline">
+                        Already have an account? Login
+                    </Link>
                 </div>
             </div>
         </div>
