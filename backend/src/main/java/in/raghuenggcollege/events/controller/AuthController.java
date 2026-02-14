@@ -3,6 +3,7 @@ package in.raghuenggcollege.events.controller;
 import in.raghuenggcollege.events.dto.AuthenticationRequest;
 import in.raghuenggcollege.events.dto.AuthenticationResponse;
 import in.raghuenggcollege.events.dto.RegisterRequest;
+import in.raghuenggcollege.events.dto.ResendOtpRequest;
 import in.raghuenggcollege.events.dto.VerifyRequest;
 import in.raghuenggcollege.events.service.AuthService;
 import jakarta.validation.Valid;
@@ -28,6 +29,12 @@ public class AuthController {
     public ResponseEntity<String> verify(@RequestBody @Valid VerifyRequest request) {
         service.verify(request);
         return ResponseEntity.ok("Account verified successfully.");
+    }
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<String> resendOtp(@RequestBody @Valid ResendOtpRequest request) {
+        service.resendOtp(request.getEmail());
+        return ResponseEntity.ok("OTP resent successfully. Please check your email.");
     }
 
     @PostMapping("/login")

@@ -3,6 +3,8 @@ import { api } from '../../lib/api';
 import { useNavigate, useParams } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../lib/utils';
 
 export default function EditEventPage() {
     const { id } = useParams();
@@ -47,10 +49,10 @@ export default function EditEventPage() {
             };
 
             await api.put(`/events/${id}`, eventData);
-            alert("Event updated successfully!");
+            toast.success("Event updated successfully!");
             navigate('/events');
         } catch (error: any) {
-            alert(error.response?.data?.message || "Failed to update event");
+            toast.error(getErrorMessage(error));
         }
     };
 

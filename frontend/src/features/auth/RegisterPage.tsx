@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { api } from '../../lib/api';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../lib/utils';
 
 const registerSchema = z.object({
     fullName: z.string().min(2, "Name is too short"),
@@ -17,6 +19,9 @@ export default function RegisterPage() {
     const [showOtp, setShowOtp] = useState(false);
     const [emailForOtp, setEmailForOtp] = useState("");
     const [otp, setOtp] = useState("");
+    const [resending, setResending] = useState(false);
+    const [otpExpiryTime, setOtpExpiryTime] = useState<number | null>(null);
+    const [timeRemaining, setTimeRemaining] = useState<number>(0);
     const navigate = useNavigate();
 
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterForm>({
@@ -28,19 +33,59 @@ export default function RegisterPage() {
             await api.post('/auth/register', data);
             setEmailForOtp(data.email);
             setShowOtp(true);
+            // OTP expires in 10 minutes
+            setOtpExpiryTime(Date.now() + 10 * 60 * 1000);
+            toast.success("OTP Sent to your email!");
         } catch (error: any) {
-            alert(error.response?.data || "Registration failed");
+            toast.error(getErrorMessage(error));
         }
     };
 
     const handleVerify = async () => {
         try {
             await api.post('/auth/verify', { email: emailForOtp, otp });
-            alert("Verified! Please login.");
+            toast.success("Verified! Please login.");
             navigate('/login');
         } catch (error: any) {
-            alert("Verification failed");
+            toast.error(getErrorMessage(error));
         }
+    };
+
+    const handleResendOtp = async () => {
+        setResending(true);
+        try {
+            await api.post('/auth/resend-otp', { email: emailForOtp });
+            toast.success("New OTP sent to your email!");
+            setOtp(""); // Clear previous OTP input
+            // Reset expiry time for new OTP
+            setOtpExpiryTime(Date.now() + 10 * 60 * 1000);
+        } catch (error: any) {
+            toast.error(getErrorMessage(error));
+        } finally {
+            setResending(false);
+        }
+    };
+
+    // Countdown timer effect
+    useEffect(() => {
+        if (!otpExpiryTime) return;
+
+        const interval = setInterval(() => {
+            const remaining = Math.max(0, otpExpiryTime - Date.now());
+            setTimeRemaining(remaining);
+
+            if (remaining === 0) {
+                clearInterval(interval);
+            }
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [otpExpiryTime]);
+
+    const formatTime = (ms: number) => {
+        const minutes = Math.floor(ms / 60000);
+        const seconds = Math.floor((ms % 60000) / 1000);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
 
     if (showOtp) {
@@ -56,9 +101,21 @@ export default function RegisterPage() {
                         className="w-full border p-2 rounded mb-4"
                         placeholder="6-digit code"
                     />
-                    <button onClick={handleVerify} className="w-full bg-blue-600 text-white p-2 rounded">
+                    <button onClick={handleVerify} className="w-full bg-blue-600 text-white p-2 rounded mb-3">
                         Verify
                     </button>
+                    <button
+                        onClick={handleResendOtp}
+                        disabled={resending || timeRemaining > 0}
+                        className="w-full bg-gray-500 text-white p-2 rounded hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {resending ? "Sending..." : timeRemaining > 0 ? `Resend OTP (${formatTime(timeRemaining)})` : "Resend OTP"}
+                    </button>
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                        {timeRemaining > 0
+                            ? `OTP expires in ${formatTime(timeRemaining)}. You can resend after it expires.`
+                            : "Didn't receive the code? Check your spam folder or click Resend."}
+                    </p>
                 </div>
             </div>
         );

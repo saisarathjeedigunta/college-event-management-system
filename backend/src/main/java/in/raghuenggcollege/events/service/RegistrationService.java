@@ -22,6 +22,7 @@ public class RegistrationService {
     private final RegistrationRepository registrationRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     @Transactional
     public Registration registerUser(Long eventId, String userEmail) {
@@ -39,9 +40,15 @@ public class RegistrationService {
             }
             // Re-activate cancelled registration
             long confirmedCount = registrationRepository.countByEventAndStatus(event, RegistrationStatus.CONFIRMED);
-            existing.setStatus((confirmedCount < event.getCapacity()) ? RegistrationStatus.CONFIRMED
-                    : RegistrationStatus.WAITLIST);
-            return registrationRepository.save(existing);
+            RegistrationStatus newStatus = (confirmedCount < event.getCapacity()) ? RegistrationStatus.CONFIRMED
+                    : RegistrationStatus.WAITLIST;
+            existing.setStatus(newStatus);
+
+            Registration saved = registrationRepository.save(existing);
+            if (newStatus == RegistrationStatus.CONFIRMED) {
+                sendConfirmationEmail(user, event);
+            }
+            return saved;
         }
 
         long confirmedCount = registrationRepository.countByEventAndStatus(event, RegistrationStatus.CONFIRMED);
@@ -56,7 +63,22 @@ public class RegistrationService {
                 .status(status)
                 .build();
 
-        return registrationRepository.save(registration);
+        Registration saved = registrationRepository.save(registration);
+        if (status == RegistrationStatus.CONFIRMED) {
+            sendConfirmationEmail(user, event);
+        }
+        return saved;
+    }
+
+    private void sendConfirmationEmail(User user, Event event) {
+        notificationService.sendEmail(
+                user.getEmail(),
+                "Registration Confirmed: " + event.getTitle(),
+                "Hello " + user.getFullName() + ",\n\n" +
+                        "You have successfully registered for " + event.getTitle() + ".\n" +
+                        "Venue: " + event.getVenue() + "\n" +
+                        "Time: " + event.getStartTime() + "\n\n" +
+                        "See you there!");
     }
 
     @Transactional

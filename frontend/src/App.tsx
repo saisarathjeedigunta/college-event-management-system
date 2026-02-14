@@ -5,10 +5,12 @@ import EventsPage from './features/events/EventsPage';
 import CreateEventPage from './features/events/CreateEventPage';
 import EditEventPage from './features/events/EditEventPage';
 import MyRegistrationsPage from './features/events/MyRegistrationsPage';
+import { Toaster } from 'react-hot-toast';
 
 function App() {
   return (
     <BrowserRouter>
+      <Toaster position="top-right" />
       <Routes>
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />

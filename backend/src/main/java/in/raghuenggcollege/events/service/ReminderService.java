@@ -19,29 +19,69 @@ public class ReminderService {
     private final RegistrationRepository registrationRepository;
     private final NotificationService notificationService;
 
-    // Run every hour to check for events starting in the next 24-25 hours
+    // PRODUCTION MODE: Run every hour
     @Scheduled(cron = "0 0 * * * *")
     public void sendEventReminders() {
-        LocalDateTime tomorrowStart = LocalDateTime.now().plusDays(1).minusMinutes(30); // simplistic check
-        LocalDateTime tomorrowEnd = LocalDateTime.now().plusDays(1).plusMinutes(30);
+        System.out.println("⏰ Reminder Service: Checking for upcoming events...");
 
-        // Find events starting around this time tomorrow
-        // Note: In a real app, use a custom query for "between" dates.
-        // For simplicity, we'll fetch all future events and filter in code (not
-        // efficient for huge data, fine for college project)
+        LocalDateTime now = LocalDateTime.now();
+
+        // Find all upcoming events (next 7 days)
         List<Event> upcomingEvents = eventRepository.findAll().stream()
-                .filter(e -> e.getStartTime().isAfter(tomorrowStart) &&
-                        e.getStartTime().isBefore(tomorrowEnd))
+                .filter(e -> e.getStartTime().isAfter(now))
                 .toList();
 
+        System.out.println("📋 Found " + upcomingEvents.size() + " upcoming events.");
+
         for (Event event : upcomingEvents) {
-            List<Registration> registrations = registrationRepository.findByEvent(event);
+            System.out.println("🔍 Processing event ID: " + event.getId() + ", Title: " + event.getTitle() + " at "
+                    + event.getStartTime());
+
+            // Calculate time until event
+            long hoursUntilEvent = java.time.Duration.between(now, event.getStartTime()).toHours();
+            long minutesUntilEvent = java.time.Duration.between(now, event.getStartTime()).toMinutes();
+
+            System.out
+                    .println("   Time until event: " + hoursUntilEvent + " hours (" + minutesUntilEvent + " minutes)");
+
+            // Send reminders at specific intervals: 24h, 1h, 15min
+            boolean shouldSendReminder = false;
+            String reminderType = "";
+
+            if (hoursUntilEvent >= 23 && hoursUntilEvent <= 25) {
+                shouldSendReminder = true;
+                reminderType = "24 hours";
+            } else if (hoursUntilEvent >= 0 && hoursUntilEvent <= 1 && minutesUntilEvent > 15) {
+                shouldSendReminder = true;
+                reminderType = "1 hour";
+            } else if (minutesUntilEvent >= 10 && minutesUntilEvent <= 20) {
+                shouldSendReminder = true;
+                reminderType = "15 minutes";
+            }
+
+            if (!shouldSendReminder) {
+                System.out.println("   ⏭️ Skipping - Not in reminder window (24h, 1h, or 15min before)");
+                continue;
+            }
+
+            System.out.println("   ✅ Sending " + reminderType + " reminder");
+
+            List<Registration> registrations = registrationRepository.findByEventIdWithUser(event.getId());
+            System.out.println("   Found " + registrations.size() + " registrations for event ID: " + event.getId());
+
             for (Registration reg : registrations) {
+                System.out.println("   - Registration ID: " + reg.getId() + ", Status: " + reg.getStatus());
+
                 if (reg.getUser() != null && reg.getUser().getEmail() != null) {
+                    System.out.println("📨 Sending reminder to: " + reg.getUser().getEmail());
                     notificationService.sendEmail(
                             reg.getUser().getEmail(),
-                            "Reminder: " + event.getTitle() + " is tomorrow!",
-                            "Don't forget, " + event.getTitle() + " starts at " + event.getStartTime());
+                            "Reminder: " + event.getTitle() + " is coming up!",
+                            "Don't forget! " + event.getTitle() + " starts at " + event.getStartTime() +
+                                    " (in approximately " + reminderType + ").\n\nVenue: " + event.getVenue() +
+                                    "\n\nSee you there!");
+                } else {
+                    System.out.println("   ⚠️ Skipping - User or email is null");
                 }
             }
         }

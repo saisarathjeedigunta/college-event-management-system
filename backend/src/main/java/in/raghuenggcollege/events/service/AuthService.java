@@ -19,6 +19,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Random;
@@ -34,24 +35,45 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JavaMailSender mailSender;
 
+    // Public method - handles registration flow
     public void register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already registered");
+            User existingUser = userRepository.findByEmail(request.getEmail()).get();
+            if (existingUser.isVerified()) {
+                throw new RuntimeException("Email already registered");
+            }
+            // User exists but NOT verified -> Update details & Resend OTP
+            updateExistingUser(existingUser, request);
+            String otp = generateAndSaveOtp(existingUser.getEmail());
+            sendOtpEmailSafely(existingUser.getEmail(), otp);
+            return;
         }
 
+        // Create new user and token (transactional)
+        User user = createUserAndToken(request);
+
+        // Send email (non-transactional, with error handling)
+        String otp = tokenRepository.findByEmail(user.getEmail())
+                .orElseThrow(() -> new RuntimeException("Token not found"))
+                .getOtpCode();
+        sendOtpEmailSafely(user.getEmail(), otp);
+    }
+
+    // Transactional: Create user and token atomically
+    @Transactional
+    private User createUserAndToken(RegisterRequest request) {
         var user = User.builder()
                 .fullName(request.getFullName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.STUDENT) // Default role
+                .role(Role.STUDENT)
                 .isVerified(false)
                 .build();
 
         userRepository.save(user);
 
-        // Generate and Send OTP
+        // Generate and save OTP token
         String otp = String.format("%06d", new Random().nextInt(999999));
-
         var token = VerificationToken.builder()
                 .email(request.getEmail())
                 .otpCode(otp)
@@ -59,7 +81,57 @@ public class AuthService {
                 .build();
 
         tokenRepository.save(token);
-        sendOtpEmail(request.getEmail(), otp);
+        return user;
+    }
+
+    // Transactional: Update existing unverified user
+    @Transactional
+    private void updateExistingUser(User user, RegisterRequest request) {
+        user.setFullName(request.getFullName());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        userRepository.save(user);
+    }
+
+    // Transactional: Generate and save new OTP
+    @Transactional
+    private String generateAndSaveOtp(String email) {
+        String otp = String.format("%06d", new Random().nextInt(999999));
+        VerificationToken token = tokenRepository.findByEmail(email)
+                .orElse(VerificationToken.builder().email(email).build());
+
+        token.setOtpCode(otp);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        tokenRepository.save(token);
+        return otp;
+    }
+
+    // Non-transactional: Send email with error handling
+    private void sendOtpEmailSafely(String email, String otp) {
+        try {
+            sendOtpEmail(email, otp);
+            System.out.println("✅ OTP email sent successfully to: " + email);
+        } catch (Exception e) {
+            System.err.println("⚠️ Failed to send OTP email to: " + email);
+            System.err.println("   Error: " + e.getMessage());
+            // User is still created - they can request resend later
+            // Don't throw exception - registration should succeed
+        }
+    }
+
+    // Public method: Resend OTP to user
+    public void resendOtp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.isVerified()) {
+            throw new RuntimeException("User already verified");
+        }
+
+        // Generate and save new OTP
+        String otp = generateAndSaveOtp(email);
+
+        // Send email (gracefully handles failures)
+        sendOtpEmailSafely(email, otp);
     }
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
@@ -113,10 +185,17 @@ public class AuthService {
     }
 
     private void sendOtpEmail(String to, String otp) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(to);
-        message.setSubject("Raghu Engineering College - Email Verification");
-        message.setText("Your verification code is: " + otp + "\n\nThis code expires in 10 minutes.");
-        mailSender.send(message);
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setTo(to);
+            message.setSubject("Raghu Engineering College - Email Verification");
+            message.setText("Your verification code is: " + otp + "\n\nThis code expires in 10 minutes.");
+            mailSender.send(message);
+            System.out.println("✅ OTP Email sent successfully to: " + to);
+        } catch (Exception e) {
+            System.err.println("❌ FAILED to send OTP email to: " + to);
+            e.printStackTrace();
+            throw new RuntimeException("Failed to send OTP email: " + e.getMessage());
+        }
     }
 }

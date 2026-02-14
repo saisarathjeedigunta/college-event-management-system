@@ -1,6 +1,8 @@
 import { useForm } from 'react-hook-form';
 import { api } from '../../lib/api';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../lib/utils';
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -17,10 +19,12 @@ export default function LoginPage() {
             if (res.data.role === 'STUDENT') {
                 navigate('/events');
             } else {
-                navigate('/events'); // Admins also go there for now, but see Create button
+                navigate('/events');
             }
+            toast.success("Login Successful!");
         } catch (error: any) {
-            alert(error.response?.data?.message || "Login failed");
+            console.error('Login Error:', error);
+            toast.error(getErrorMessage(error));
         }
     };
 

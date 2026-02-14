@@ -2,6 +2,8 @@ import { Calendar, MapPin, MoreHorizontal, Clock, Users, Edit, Trash2, Check } f
 import { api } from '../lib/api';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '../lib/utils';
 
 interface EventCardProps {
     id: number;
@@ -26,11 +28,11 @@ export default function EventCard({ id, title, date, time, venue, tags = [], att
         try {
             setLoading(true);
             await api.post(`/registrations/events/${id}`);
-            alert('Successfully Registered!');
+            toast.success('Successfully Registered!');
             if (onRefresh) onRefresh();
         } catch (err: any) {
-            // Display specific error message from backend
-            alert(err.response?.data?.message || err.message || 'Failed to register');
+            console.error('Registration Error:', err);
+            toast.error(getErrorMessage(err));
         } finally {
             setLoading(false);
         }
@@ -40,10 +42,12 @@ export default function EventCard({ id, title, date, time, venue, tags = [], att
         if (!confirm("Are you sure you want to delete this event?")) return;
         try {
             await api.delete(`/events/${id}`);
-            alert("Event deleted successfully");
+            toast.success("Event deleted successfully");
             if (onRefresh) onRefresh();
         } catch (err: any) {
-            alert(err.response?.data?.message || "Failed to delete event");
+            console.error('Delete Error:', err);
+            const errorMsg = err.response?.data?.message || err.message || "Failed to delete event";
+            toast.error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
         }
     };
 

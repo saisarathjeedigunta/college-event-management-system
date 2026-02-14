@@ -2,6 +2,8 @@ import { useForm } from 'react-hook-form';
 import { api } from '../../lib/api';
 import { useNavigate } from 'react-router-dom';
 import DashboardLayout from '../../layouts/DashboardLayout';
+import toast from 'react-hot-toast';
+import { getErrorMessage } from '../../lib/utils';
 
 export default function CreateEventPage() {
     const navigate = useNavigate();
@@ -18,10 +20,10 @@ export default function CreateEventPage() {
             };
 
             await api.post('/events', eventData);
-            alert("Event created successfully!");
+            toast.success("Event created successfully!");
             navigate('/events');
         } catch (error: any) {
-            alert(error.response?.data?.message || "Failed to create event");
+            toast.error(getErrorMessage(error));
         }
     };
 
